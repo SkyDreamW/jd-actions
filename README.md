@@ -8,7 +8,22 @@
 - **多账号** — 支持 `JD_COOKIE` / `JD_COOKIE2` / `JD_COOKIE3`（想加更多可自行在 `jd_sign.js` 和 workflow 里扩展）
 - **多通道推送** — Server酱（微信）、Bark（iOS）
 - **自动定时** — 每天北京时间 7:15 执行（错峰避开凌晨高峰），也可手动触发
-- **风控优化** — 请求间自动加 5-15 秒随机延迟，默认关闭超市/秒杀/现金红包等易风控接口
+- **脚本随上游更新** — 每次运行都从 `shufflewzc/faker2` 拉最新脚本，京东改接口时不用自己修
+
+## 脚本来源
+
+签到脚本不再自己维护，改为每天运行时克隆 [`shufflewzc/faker2`](https://github.com/shufflewzc/faker2) 并执行其中的日常脚本：
+
+| 任务 | 脚本文件 |
+|---|---|
+| 天天领豆 | `jd_signbeanact_.js` |
+| 打卡领豆 | `jd_daka_bean.js` |
+| 升级赚京豆 | `jd_bean_home.js` |
+| 种豆得豆 | `jd_plantBean.js` |
+| 互动游戏赚豆 | `jd_hdyxzd.js` |
+| 资产统计 | `jd_bean_change.js` |
+
+> 早期版本用的是 NobyDa 的 `JD_DailyBonus.js`，那份脚本最后更新于 2021-09，京东接口早已下线，实测 28 项任务全部失败，已弃用。想增删任务，改 `jd_sign.js` 顶部的 `TASKS` 数组即可。
 
 ## 快速开始
 
@@ -67,15 +82,18 @@ git push -u origin main
 - 定时触发有几分钟延迟属正常；GitHub 免费额度每月 2000 分钟，签到每天跑几分钟，完全够用。
 - 想改执行时间：编辑 `.github/workflows/jd.yml` 里的 `cron`，注意是 **UTC 时间**（北京时间 = UTC + 8 小时）。
 - 领取的京豆数量不稳定，且部分接口限量，属于正常现象。
-- **风险提示**：脚本通过逆向京东接口领取京豆，有违反《京东用户协议》的可能，存在账号被风控的风险，请自行评估后使用。
+- **单任务失败不影响其他任务**：`jd_sign.js` 会逐个执行并汇总，只有全部失败才让 workflow 变红。每次运行的完整日志在 Actions 页面的 `sign-result` artifact 里。
+- 推送是**汇总成一条**（子脚本自带的推送已屏蔽），标题形如 `京东日常 2026.10.22 (6/6)`；如果检测到 Cookie 失效，标题会多一个 `Cookie可能失效` 提示。
+- **风险提示**：脚本通过逆向京东接口领京豆，有违反《京东用户协议》的可能，存在账号被风控的风险，请自行评估后使用。
 
 ## 默认执行时间参考
 
 | 北京时间 | 对应 cron (UTC) |
 |---|---|
-| 每天 00:00 | `0 16 * * *`（当前用 00:15 = `15 16 * * *`） |
+| 每天 07:15 | `15 23 * * *` |
 
 ## 依赖
 
-- Node.js（GitHub Actions 环境自动安装）
-- `request` 模块（NobyDa 脚本内部使用）
+- Node.js 22（GitHub Actions 环境自动安装）
+- faker2 脚本所需的 npm 包：`got@11`（必须 11.x，12+ 是纯 ESM）、`tough-cookie@4`、`https-proxy-agent`、`crypto-js`、`big-integer`、`axios`、`jsdom`、`dotenv`、`tunnel`、`global-agent`、`moment`
+- 版本固定在 workflow 的「安装脚本依赖」步骤里，保证可复现

@@ -11,6 +11,11 @@ on:
   watch:
     types: [started]
 
+# 同一时间只跑一个，避免定时任务和手动触发撞车
+concurrency:
+  group: jd-sign
+  cancel-in-progress: false
+
 # 配置环境变量（从 GitHub Secrets 读取，不要写死在代码里）
 env:
   JD_COOKIE: ${{ secrets.JD_COOKIE }}
@@ -18,15 +23,8 @@ env:
   JD_COOKIE3: ${{ secrets.JD_COOKIE3 }}
   PUSH_KEY: ${{ secrets.PUSH_KEY }}
   BARK_KEY: ${{ secrets.BARK_KEY }}
-  # 风控优化：请求间随机延迟（毫秒），默认 5-15 秒
-  JD_DELAY: '5000-15000'
-  # 风控优化：禁用的接口代号（逗号分隔）。留空则全量签到。
-  # 实测：京豆主签到(JDBean)/转盘(JDTurn)/现金红包(JDCash) 已被京东新签名拦截报错，
-  # 禁用可避免反复 403/参数异常触发风控；保留钢镚(JRSteel)/魔方(JDCube) 等有真实响应的接口。
-  JD_DISABLE: 'JDBean,JDTurn,JDCash'
-  # 风控优化关键：请求 UA 必须与抓取 Cookie 的浏览器 UA 一致！
-  # 你从 Mac Firefox 抓的 Cookie，这里就用 Firefox 桌面 UA。可设为 Secret JD_UA 覆盖。
-  JD_UA: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0'
+  # 脚本库目录，jd_sign.js 在这里执行各个脚本
+  JD_SCRIPT_DIR: ${{ github.workspace }}/faker2
 
 jobs:
   sign:
@@ -39,13 +37,32 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          # 这里的 node-version 是「项目运行时」，与 action 内部使用的 Node 版本无关。
-          # Node 20 已于 2026-04 停止维护，后续建议升到 22 或 24。
-          node-version: '20'
+          # 这是「项目运行时」，与 action 内部使用的 Node 版本无关
+          node-version: '22'
 
-      - name: Install request dependency
-        # NobyDa 脚本内部依赖 request 模块
-        run: npm install request
+      - name: 拉取脚本库（shufflewzc/faker2）
+        # 不再自己维护签到脚本：faker2 上游持续更新（脚本内部版本号 2026xxxx），
+        # 每天拉最新，京东改接口时上游先修，我们不用跟着改。
+        run: git clone --depth 1 https://github.com/shufflewzc/faker2.git faker2
+
+      - name: 安装脚本依赖
+        # faker2 没有 package.json，这里显式锁版本，保证可复现。
+        # got 必须锁 11.x：12 之后是纯 ESM，这些脚本用的是 require('got')。
+        run: |
+          cd faker2
+          npm init -y > /dev/null 2>&1
+          npm install --no-audit --no-fund \
+            got@11.8.6 \
+            tough-cookie@4.1.4 \
+            https-proxy-agent \
+            crypto-js \
+            big-integer \
+            axios \
+            jsdom \
+            dotenv \
+            tunnel \
+            global-agent \
+            moment
 
       - name: Run JD sign script
         run: node jd_sign.js
