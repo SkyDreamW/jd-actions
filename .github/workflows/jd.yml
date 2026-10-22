@@ -33,11 +33,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # v5 起 action 自身运行在 Node 24 上（v4 是 node20，已被 runner 移除）
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
+          # 这里的 node-version 是「项目运行时」，与 action 内部使用的 Node 版本无关。
+          # Node 20 已于 2026-04 停止维护，后续建议升到 22 或 24。
           node-version: '20'
 
       - name: Install request dependency
@@ -49,7 +52,8 @@ jobs:
 
       - name: Upload result artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        # 注意：v5 仍然声明 node20，必须直接升到 v6（v6 才是 node24）
+        uses: actions/upload-artifact@v6
         with:
           name: sign-result
           path: |
